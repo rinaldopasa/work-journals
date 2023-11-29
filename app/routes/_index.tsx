@@ -2,6 +2,8 @@ import { redirect } from "@remix-run/node";
 import type { ActionFunctionArgs, MetaFunction } from "@remix-run/node";
 import { Form } from "@remix-run/react";
 
+import { PrismaClient } from "@prisma/client";
+
 export const meta: MetaFunction = () => {
   return [
     { title: "Work Journals" },
@@ -10,10 +12,26 @@ export const meta: MetaFunction = () => {
 };
 
 export async function action({ request }: ActionFunctionArgs) {
-  let formData = await request.formData();
-  let json = Object.fromEntries(formData);
+  const prisma = new PrismaClient();
+  const formData = await request.formData();
+  const { createdAt, category, text } = Object.fromEntries(formData);
 
-  console.log(json);
+  if (
+    typeof createdAt !== "string" ||
+    typeof category !== "string" ||
+    typeof text !== "string"
+  ) {
+    throw new Error("Bad request");
+  }
+
+  await prisma.entry.create({
+    data: {
+      createdAt: new Date(createdAt),
+      category: category,
+      text: text,
+    },
+  });
+
   return redirect("/");
 }
 
@@ -29,7 +47,7 @@ export default function Index() {
         <Form method="POST" className="space-y-3">
           <p className="italic text-gray-400">Create an entry</p>
 
-          <input type="date" name="date" className="text-gray-700" />
+          <input type="date" name="createdAt" className="text-gray-700" />
 
           <div className="space-x-7">
             <label>
@@ -55,7 +73,7 @@ export default function Index() {
                 className="mr-1"
                 type="radio"
                 name="category"
-                value="interesting"
+                value="interesting-thing"
               />
               Interesting
             </label>
