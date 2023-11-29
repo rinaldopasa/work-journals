@@ -1,5 +1,5 @@
 import type { ActionFunctionArgs, MetaFunction } from "@remix-run/node";
-import { useFetcher } from "@remix-run/react";
+import { useFetcher, useLoaderData } from "@remix-run/react";
 
 import { PrismaClient } from "@prisma/client";
 import { format } from "date-fns";
@@ -37,8 +37,16 @@ export async function action({ request }: ActionFunctionArgs) {
   });
 }
 
+export async function loader() {
+  const prisma = new PrismaClient();
+  const entries = await prisma.entry.findMany();
+
+  return entries;
+}
+
 export default function Index() {
   const fetcher = useFetcher();
+  const entries = useLoaderData<typeof loader>();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
@@ -114,7 +122,11 @@ export default function Index() {
         </fetcher.Form>
       </div>
 
-      <article className="mt-7">
+      {entries.map((entry) => (
+        <p key={entry.id}>{entry.text}</p>
+      ))}
+
+      {/* <article className="mt-7">
         <header>
           <h2 className="font-bold">
             Week of January 20<sup>th</sup>
@@ -144,7 +156,7 @@ export default function Index() {
             </ul>
           </article>
         </div>
-      </article>
+      </article> */}
     </main>
   );
 }
