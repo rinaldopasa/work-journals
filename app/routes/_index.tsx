@@ -2,8 +2,8 @@ import type { ActionFunctionArgs, MetaFunction } from "@remix-run/node";
 import { useFetcher, useLoaderData } from "@remix-run/react";
 
 import { PrismaClient } from "@prisma/client";
-import { format } from "date-fns";
-import { useEffect, useRef } from "react";
+import { format, parseISO, startOfWeek } from "date-fns";
+import React, { useEffect, useRef } from "react";
 
 export const meta: MetaFunction = () => {
   return [
@@ -41,13 +41,62 @@ export async function loader() {
   const prisma = new PrismaClient();
   const entries = await prisma.entry.findMany();
 
-  return entries;
+  return entries.map((entry) => ({
+    ...entry,
+    createdAt: entry.createdAt.toISOString().substring(0, 10),
+  }));
 }
+
+type Category = "work" | "learnings" | "interestingThings";
 
 export default function Index() {
   const fetcher = useFetcher();
   const entries = useLoaderData<typeof loader>();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  let entriesByWeek = entries.reduce<Record<string, typeof entries>>(
+    (acc, entry) => {
+      const sunday = startOfWeek(parseISO(entry.createdAt));
+      const sundayString = format(sunday, "yyyy-MM-dd");
+
+      acc[sundayString] ??= [];
+      acc[sundayString].push(entry);
+
+      return acc;
+    },
+    {},
+  );
+
+  const sortedDate = Object.keys(entriesByWeek).sort((a, b) =>
+    a.localeCompare(b),
+  );
+  const weeks = new Map<string, Record<Category, typeof entries>>();
+
+  for (const dateString of sortedDate) {
+    const weekObject: Record<Category, typeof entries> = {
+      work: [],
+      learnings: [],
+      interestingThings: [],
+    };
+
+    for (const entry of entriesByWeek[dateString]) {
+      switch (entry.category) {
+        case "work":
+          weekObject.work.push(entry);
+          break;
+        case "learning":
+          weekObject.learnings.push(entry);
+          break;
+        case "interesting-thing":
+          weekObject.interestingThings.push(entry);
+          break;
+        default:
+          break;
+      }
+    }
+
+    weeks.set(dateString, weekObject);
+  }
 
   useEffect(() => {
     if (fetcher.state === "idle" && textareaRef.current) {
@@ -55,6 +104,63 @@ export default function Index() {
       textareaRef.current.focus();
     }
   }, [fetcher.state]);
+
+  function getWeeklySummary(weeksMap: typeof weeks) {
+    const summaries: React.ReactNode[] = [];
+    weeksMap.forEach((category, dateString) =>
+      summaries.push(
+        <article key={dateString}>
+          <header>
+            <h2 className="text-xl font-bold">
+              Week of {format(parseISO(dateString), "MMMM, d")}
+            </h2>
+          </header>
+
+          <div className="mt-3 space-y-4">
+            {category.work.length > 0 && (
+              <article>
+                <h3 className="font-semibold">Work</h3>
+                <ul className="ml-7 list-disc">
+                  {category.work.map((entry) => (
+                    <li key={entry.id} className="font-mono">
+                      {entry.text}
+                    </li>
+                  ))}
+                </ul>
+              </article>
+            )}
+
+            {category.learnings.length > 0 && (
+              <article>
+                <h3 className="font-semibold">Learnings</h3>
+                <ul className="ml-7 list-disc">
+                  {category.learnings.map((entry) => (
+                    <li key={entry.id} className="font-mono">
+                      {entry.text}
+                    </li>
+                  ))}
+                </ul>
+              </article>
+            )}
+
+            {category.interestingThings.length > 0 && (
+              <article>
+                <h3 className="font-semibold">Interesting Things</h3>
+                <ul className="ml-7 list-disc">
+                  {category.interestingThings.map((entry) => (
+                    <li key={entry.id} className="font-mono">
+                      {entry.text}
+                    </li>
+                  ))}
+                </ul>
+              </article>
+            )}
+          </div>
+        </article>,
+      ),
+    );
+    return summaries;
+  }
 
   return (
     <main className="p-20">
@@ -122,41 +228,13 @@ export default function Index() {
         </fetcher.Form>
       </div>
 
-      {entries.map((entry) => (
-        <p key={entry.id}>{entry.text}</p>
-      ))}
-
-      {/* <article className="mt-7">
-        <header>
-          <h2 className="font-bold">
-            Week of January 20<sup>th</sup>
-          </h2>
-        </header>
-
-        <div className="mt-3 space-y-4">
-          <article>
-            <h3>Work</h3>
-            <ul className="ml-7 list-disc">
-              <li>First item</li>
-              <li>Second item</li>
-            </ul>
-          </article>
-          <article>
-            <h3>Learnings</h3>
-            <ul className="ml-7 list-disc">
-              <li>First item</li>
-              <li>Second item</li>
-            </ul>
-          </article>
-          <article>
-            <h3>Interesting things</h3>
-            <ul className="ml-7 list-disc">
-              <li>First item</li>
-              <li>Second item</li>
-            </ul>
-          </article>
-        </div>
-      </article> */}
+      <div className="mt-12 space-y-12">{getWeeklySummary(weeks)}</div>
     </main>
   );
 }
+
+// function WeeklySummary({ createdAt, category}: WeeklySummaryProps) {
+//   return (
+
+//   );
+// }
