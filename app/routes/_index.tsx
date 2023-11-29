@@ -1,8 +1,9 @@
-import { redirect } from "@remix-run/node";
 import type { ActionFunctionArgs, MetaFunction } from "@remix-run/node";
-import { Form } from "@remix-run/react";
+import { useFetcher } from "@remix-run/react";
 
 import { PrismaClient } from "@prisma/client";
+import { format } from "date-fns";
+import { useEffect, useRef } from "react";
 
 export const meta: MetaFunction = () => {
   return [
@@ -16,6 +17,9 @@ export async function action({ request }: ActionFunctionArgs) {
   const formData = await request.formData();
   const { createdAt, category, text } = Object.fromEntries(formData);
 
+  // For dev purposes
+  await new Promise((resolve) => setTimeout(resolve, 2000));
+
   if (
     typeof createdAt !== "string" ||
     typeof category !== "string" ||
@@ -24,18 +28,26 @@ export async function action({ request }: ActionFunctionArgs) {
     throw new Error("Bad request");
   }
 
-  await prisma.entry.create({
+  return prisma.entry.create({
     data: {
       createdAt: new Date(createdAt),
       category: category,
       text: text,
     },
   });
-
-  return redirect("/");
 }
 
 export default function Index() {
+  const fetcher = useFetcher();
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    if (fetcher.state === "idle" && textareaRef.current) {
+      textareaRef.current.value = "";
+      textareaRef.current.focus();
+    }
+  }, [fetcher.state]);
+
   return (
     <main className="p-20">
       <h1 className="text-5xl font-medium">Work Journals</h1>
@@ -44,51 +56,62 @@ export default function Index() {
       </p>
 
       <div className="my-7 border p-3">
-        <Form method="POST" className="space-y-3">
-          <p className="italic text-gray-400">Create an entry</p>
-
-          <input type="date" name="createdAt" className="text-gray-700" />
-
-          <div className="space-x-7">
-            <label>
-              <input
-                className="mr-1"
-                type="radio"
-                name="category"
-                value="work"
-              />
-              Work
-            </label>
-            <label>
-              <input
-                className="mr-1"
-                type="radio"
-                name="category"
-                value="learning"
-              />
-              Learning
-            </label>
-            <label>
-              <input
-                className="mr-1"
-                type="radio"
-                name="category"
-                value="interesting-thing"
-              />
-              Interesting
-            </label>
-          </div>
-
-          <textarea
-            className="w-full text-gray-700"
-            name="text"
-            placeholder="Write your entry..."
-          ></textarea>
-
-          <button className="ml-auto block bg-blue-500 px-4 py-1 font-medium text-white">
-            Save
-          </button>
-        </Form>
+        <fetcher.Form method="POST">
+          <fieldset
+            disabled={fetcher.state === "submitting"}
+            className="space-y-3 disabled:opacity-70"
+          >
+            <legend className="italic text-gray-400">Create an entry</legend>
+            <input
+              type="date"
+              name="createdAt"
+              required
+              defaultValue={format(new Date(), "yyyy-MM-dd")}
+              className="text-gray-900"
+            />
+            <div className="space-x-7">
+              <label>
+                <input
+                  required
+                  className="mr-1"
+                  type="radio"
+                  name="category"
+                  value="work"
+                />
+                Work
+              </label>
+              <label>
+                <input
+                  className="mr-1"
+                  type="radio"
+                  name="category"
+                  value="learning"
+                  defaultChecked
+                />
+                Learning
+              </label>
+              <label>
+                <input
+                  className="mr-1"
+                  type="radio"
+                  name="category"
+                  value="interesting-thing"
+                />
+                Interesting
+              </label>
+            </div>
+            <textarea
+              ref={textareaRef}
+              className="w-full text-gray-900"
+              name="text"
+              placeholder="Write your entry..."
+              required
+            ></textarea>
+            <button className="ml-auto block bg-blue-500 px-4 py-1 font-medium text-white">
+              {fetcher.state === "submitting" ? "Saving..." : "Save"}
+            </button>
+          </fieldset>
+        </fetcher.Form>
       </div>
 
       <article className="mt-7">
